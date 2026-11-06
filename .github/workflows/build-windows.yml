@@ -76,10 +76,12 @@ jobs:
 
       - name: Build voxl release
         shell: pwsh
+        env:
+          VCPKG_ROOT: C:\vcpkg
+          VCPKGRS_TRIPLET: x64-windows-static-md
+          VCPKGRS_DYNAMIC: "0"
         run: |
           cargo build --release
-          if (-not (Test-Path "target\release\voxl.exe")) { throw "voxl.exe not built" }
-          Get-Item "target\release\voxl.exe" | Select-Object Name, Length
 
       - name: Upload voxl.exe
         uses: actions/upload-artifact@v4
