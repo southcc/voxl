@@ -62,26 +62,17 @@ jobs:
           cd C:\vcpkg
           git fetch --unshallow
           .\vcpkg.exe install x264 libyuv opus --triplet x64-windows-static-md --classic
-          
-      - name: Install LLVM for bindgen
-        id: llvm
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "17.0.6"
 
-      - name: Export LIBCLANG_PATH
+      - name: Set up Built-in LIBCLANG_PATH
         shell: pwsh
         run: |
-          $bin = Join-Path "${{ steps.llvm.outputs.llvm-path }}" "bin"
+          $bin = "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\Llvm\x64\bin"
           if (-not (Test-Path (Join-Path $bin "libclang.dll"))) { throw "libclang.dll not found in $bin" }
           "LIBCLANG_PATH=$bin" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
           & (Join-Path $bin "clang.exe") --version
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-          cache-on-failure: true
 
       - name: Build voxl release
         shell: pwsh
