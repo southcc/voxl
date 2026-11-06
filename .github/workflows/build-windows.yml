@@ -59,8 +59,10 @@ jobs:
       - name: Install vcpkg packages
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install x264 libyuv opus --triplet x64-windows-static-md --classic
-
+          cd $env:VCPKG_ROOT
+          git fetch --unshallow
+          .\vcpkg.exe install x264 libyuv opus --triplet x64-windows-static-md --classic
+          
       - name: Install LLVM for bindgen
         id: llvm
         uses: KyleMayes/install-llvm-action@v2
