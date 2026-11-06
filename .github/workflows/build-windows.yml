@@ -4,15 +4,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch: # 手动触发，非常有用
+  workflow_dispatch: # 手动触发
+
+env:
+  VCPKG_ROOT: C:\vcpkg
+  VCPKGRS_TRIPLET: x64-windows-static-md
+  ESBUILD: esbuild.cmd
 
 jobs:
   build-windows:
     runs-on: windows-latest
-    env:
-      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-      VCPKGRS_TRIPLET: x64-windows-static-md
-      LIBCLANG_PATH: C:\Program Files\LLVM\bin
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -21,33 +22,58 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: x86_64-pc-windows-msvc
-          override: true
+          targets: x86_64-pc-windows-msvc
 
-      - name: Setup Node.js (for esbuild)
+      - name: Setup Node.js for esbuild
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Install esbuild
-        run: npm install -g esbuild
+        shell: pwsh
+        run: |
+          npm install -g esbuild
+          esbuild --version | Out-Host
 
-      - name: Setup vcpkg
-        uses: microsoft/vcpkg-action@v1
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:VCPKG_ROOT\vcpkg.exe")) {
+            if (-not (Test-Path "$env:VCPKG_ROOT")) {
+              git clone --depth 1 https://github.com/microsoft/vcpkg.git "$env:VCPKG_ROOT"
+            }
+            & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          }
+          & "$env:VCPKG_ROOT\vcpkg.exe" version
+
+      - name: Cache vcpkg downloads and installed tree
+        uses: actions/cache@v4
         with:
-          vcpkg-root: ${{ env.VCPKG_ROOT }}
-          triplet: x64-windows-static-md
-          packages: x264 libyuv opus
-          cache: true
+          path: |
+            C:\vcpkg\installed
+            C:\vcpkg\downloads
+          key: vcpkg-win-x64-static-md-v1
 
-      - name: Install LLVM (bindgen required)
+      - name: Install vcpkg packages
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_ROOT\vcpkg.exe" install x264 libyuv opus --triplet x64-windows-static-md
+
+      - name: Install LLVM for bindgen
+        id: llvm
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: "17.0.6"
-          directory: C:\Program Files\LLVM
+
+      - name: Export LIBCLANG_PATH
+        shell: pwsh
+        run: |
+          $bin = Join-Path "${{ steps.llvm.outputs.llvm-path }}" "bin"
+          if (-not (Test-Path (Join-Path $bin "libclang.dll"))) { throw "libclang.dll not found in $bin" }
+          "LIBCLANG_PATH=$bin" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          & (Join-Path $bin "clang.exe") --version
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
@@ -56,11 +82,15 @@ jobs:
           cache-on-failure: true
 
       - name: Build voxl release
-        run: cargo build --release
+        shell: pwsh
+        run: |
+          cargo build --release
+          if (-not (Test-Path "target\release\voxl.exe")) { throw "voxl.exe not built" }
+          Get-Item "target\release\voxl.exe" | Select-Object Name, Length
 
       - name: Upload voxl.exe
         uses: actions/upload-artifact@v4
         with:
           name: voxl-windows-x64
           path: target/release/voxl.exe
-#（注：内容由AI生成）
+          if-no-files-found: error
