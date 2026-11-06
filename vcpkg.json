@@ -1,0 +1,9 @@
+{
+  "name": "voxl",
+  "version-string": "0.3.3",
+  "dependencies": [
+    "x264",
+    "libyuv",
+    "opus"
+  ]
+}
