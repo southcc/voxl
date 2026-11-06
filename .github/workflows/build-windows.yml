@@ -1,0 +1,65 @@
+name: Build Windows voxl
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # 手动触发，非常有用
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKGRS_TRIPLET: x64-windows-static-md
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
+          override: true
+
+      - name: Setup Node.js (for esbuild)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install esbuild
+        run: npm install -g esbuild
+
+      - name: Setup vcpkg
+        uses: microsoft/vcpkg-action@v1
+        with:
+          vcpkg-root: ${{ env.VCPKG_ROOT }}
+          triplet: x64-windows-static-md
+          packages: x264 libyuv opus
+          cache: true
+
+      - name: Install LLVM (bindgen required)
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "17.0.6"
+          directory: C:\Program Files\LLVM
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          cache-on-failure: true
+
+      - name: Build voxl release
+        run: cargo build --release
+
+      - name: Upload voxl.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: voxl-windows-x64
+          path: target/release/voxl.exe
